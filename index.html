@@ -57,6 +57,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
 .meta{min-width:0}
 .doi{font:13px var(--mono);overflow-wrap:anywhere}
 .pub{font-size:.78rem;color:var(--muted)}
+.ttl{font-size:.85rem;overflow-wrap:anywhere}
 .acts{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
 .acts a,.acts button{font-size:12.5px;padding:5px 9px}
 .chip{font-size:.75rem;background:var(--accent-soft);color:var(--accent);border-radius:999px;padding:1px 8px;margin-left:6px}
@@ -75,7 +76,7 @@ code{font:13px var(--mono);background:var(--bg);padding:1px 5px;border-radius:4p
 <div class="wrap">
   <header>
     <h1>NDMU DOI 全文入口</h1>
-    <p class="sub">輸入 DOI，自動轉成學校入口網站的 PDF 網址。先在同一個瀏覽器登入入口網站，再點連結就會用您的權限下載。</p>
+    <p class="sub">輸入 DOI 或 PMID，自動轉成學校入口網站的 PDF 網址。先在同一個瀏覽器登入入口網站，再點連結就會用您的權限下載。</p>
   </header>
 
   <section aria-labelledby="s-login" class="login">
@@ -88,18 +89,18 @@ code{font:13px var(--mono);background:var(--bg);padding:1px 5px;border-radius:4p
   </section>
 
   <section aria-labelledby="s-quick">
-    <h2 id="s-quick">單篇下載 <small>貼上 DOI 後按 Enter</small></h2>
+    <h2 id="s-quick">單篇下載 <small>貼上 DOI 或 PMID 後按 Enter</small></h2>
     <div class="row">
-      <input id="quick" type="text" placeholder="10.1111/jcpe.12936 或 https://doi.org/10.1111/jcpe.12936" autocomplete="off" spellcheck="false">
+      <input id="quick" type="text" placeholder="10.1111/jcpe.12936、32383274 或 PubMed／doi.org 網址" autocomplete="off" spellcheck="false">
       <button id="quickGo">開啟 PDF</button>
       <button id="quickArt" class="ghost">文章頁</button>
     </div>
-    <p id="quickMsg" class="hint">支援 Wiley（JP、JCP、JPR、COIR、Perio 2000）、Cochrane、Springer、SAGE、Taylor &amp; Francis；其他出版社會改走 doi.org。</p>
+    <p id="quickMsg" class="hint">支援 Wiley（JP、JCP、JPR、COIR、Perio 2000）、Cochrane、Springer、SAGE、Taylor &amp; Francis；其他出版社會改走 doi.org。輸入 PMID 時會先向 PubMed 查出 DOI。</p>
   </section>
 
   <section aria-labelledby="s-batch">
     <h2 id="s-batch">批次清單 <small>可直接從 Excel 整欄貼上</small></h2>
-    <textarea id="batch" placeholder="每行一個 DOI，或整段文字貼上也可以，會自動抓出 DOI" spellcheck="false"></textarea>
+    <textarea id="batch" placeholder="每行一個 DOI 或 PMID（可混合），從 Excel 整欄貼上即可" spellcheck="false"></textarea>
     <div class="row">
       <button id="build">產生清單</button>
       <button id="next" class="ghost" disabled>開啟下一篇未下載</button>
@@ -208,52 +209,128 @@ code{font:13px var(--mono);background:var(--bg);padding:1px 5px;border-radius:4p
   })();
   renderSuffix();
 
-  // quick
+  // ---------- PMID support ----------
+  var KEY_C='doiPortal.pmidCache';
+  var cache=load(KEY_C,{});            // pmid -> {doi, label}
+  items=(items||[]).map(function(x){return typeof x==='string'?{doi:x}:x});
+  function lineTokens(text,strict){
+    // returns [{doi}|{pmid}] in input order, de-duplicated
+    var out=[],seen={};
+    function add(o){var k=o.doi?('d:'+o.doi.toLowerCase()):('p:'+o.pmid);if(!seen[k]){seen[k]=1;out.push(o)}}
+    String(text||'').split(/\r?\n/).forEach(function(line){
+      var t=line.trim(); if(!t) return;
+      var dois=extractAll(t);
+      if(dois.length){dois.forEach(function(d){add({doi:d})});return}
+      var m=t.match(/pubmed\.ncbi\.nlm\.nih\.gov\/(\d{1,9})/i)||t.match(/pmid\s*[:：]?\s*(\d{1,9})/i)||t.match(/^(\d{1,9})$/);
+      if(m){add({pmid:m[1]});return}
+      if(!strict){var all=t.match(/\b\d{6,9}\b/g);if(all)all.forEach(function(p){add({pmid:p})})}
+    });
+    return out;
+  }
+  function esummary(pmids){
+    var need=pmids.filter(function(p){return !cache[p]});
+    var chunks=[];for(var i=0;i<need.length;i+=200)chunks.push(need.slice(i,i+200));
+    return chunks.reduce(function(prev,ch){return prev.then(function(){
+      var url='https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&retmode=json&tool=ndmu-doi-portal&id='+ch.join(',');
+      return fetch(url).then(function(r){if(!r.ok)throw new Error('NCBI '+r.status);return r.json()}).then(function(j){
+        var res=j.result||{};
+        ch.forEach(function(p){var a=res[p];
+          if(!a||a.error){cache[p]={doi:null,label:'',bad:1};return}
+          var doi=null;(a.articleids||[]).forEach(function(x){if(x.idtype==='doi')doi=x.value});
+          if(!doi&&a.elocationid){var m=String(a.elocationid).match(/10\.\d{4,9}\/\S+/);if(m)doi=m[0]}
+          var au=(a.sortfirstauthor||(a.authors&&a.authors[0]&&a.authors[0].name)||'').split(' ')[0];
+          var yr=String(a.pubdate||'').slice(0,4);
+          cache[p]={doi:doi,label:(au?au+' ':'')+(yr?yr+' – ':'')+(a.title||'').replace(/\.$/,'')};
+        });
+        save(KEY_C,cache);
+      })})},Promise.resolve());
+  }
+  function finalize(list){
+    // turn tokens into items using the cache
+    return list.map(function(o){
+      if(o.doi) return {doi:o.doi};
+      var c=cache[o.pmid]||{};
+      return {pmid:o.pmid,doi:c.doi||null,label:c.label||'',bad:c.bad||0};
+    });
+  }
+  function keyOf(it){return it.doi?it.doi.toLowerCase():'pmid:'+it.pmid}
+  function linksOf(it){
+    if(it.doi) return route(it.doi);
+    return {pub:it.bad?'PubMed 查無此 PMID':'PubMed 沒有登錄 DOI，請從 PubMed 頁面的全文連結進入',pdf:null,
+            art:'https://pubmed.ncbi.nlm.nih.gov/'+it.pmid+'/',noProxy:true};
+  }
+
+  // ---------- quick ----------
   function quick(kind){
-    var a=detectSuffix($('quick').value); if(a) setSuffix(a,'從貼上的網址偵測');
-    var d=cleanDoi($('quick').value);
-    if(!d){$('quickMsg').textContent='找不到 DOI，請確認格式，例如 10.1111/jcpe.12936。';return}
-    var r=route(d), u=(kind==='pdf'&&r.pdf)?r.pdf:r.art;
-    $('quickMsg').textContent=r.pub+'：'+d+(kind==='pdf'&&!r.pdf?'（此出版社沒有 PDF 直連，已開文章頁）':'');
-    openUrl(u); markDone(d,true);
+    var raw=$('quick').value, a=detectSuffix(raw); if(a) setSuffix(a,'從貼上的網址偵測');
+    var toks=lineTokens(raw.split(/\r?\n/)[0],true);
+    if(!toks.length){$('quickMsg').textContent='找不到 DOI 或 PMID，例如 10.1111/jcpe.12936 或 32383274。';return}
+    var tk=toks[0];
+    if(tk.doi){var r=route(tk.doi),u=(kind==='pdf'&&r.pdf)?r.pdf:r.art;
+      $('quickMsg').textContent=r.pub+'：'+tk.doi+(kind==='pdf'&&!r.pdf?'（此出版社沒有 PDF 直連，已開文章頁）':'');
+      openUrl(u);markDone(tk.doi,true);return}
+    // PMID: open a blank tab now (keeps the click as a user gesture), fill it after lookup
+    var w=window.open('about:blank','_blank'); try{if(w)w.opener=null}catch(e){}
+    $('quickMsg').textContent='查詢 PMID '+tk.pmid+' 中…';
+    esummary([tk.pmid]).then(function(){
+      var it=finalize([tk])[0], r=linksOf(it), u=(kind==='pdf'&&r.pdf)?r.pdf:r.art;
+      $('quickMsg').textContent='PMID '+tk.pmid+(it.doi?' → '+it.doi:'')+'｜'+(it.label||'')+'｜'+r.pub;
+      if(w)w.location.href=u;else openUrl(u);
+      markDone(keyOf(it),true);
+    }).catch(function(err){if(w)w.close();$('quickMsg').textContent='查詢 NCBI 失敗（'+err.message+'），請稍後再試，或改貼 DOI。'});
   }
   $('quickGo').addEventListener('click',function(){quick('pdf')});
   $('quickArt').addEventListener('click',function(){quick('art')});
   $('quick').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();quick('pdf')}});
 
-  // batch
-  function markDone(d,v){var k=d.toLowerCase();if(v)done[k]=1;else delete done[k];save(KEY_D,done);render()}
-  function isDone(d){return !!done[d.toLowerCase()]}
+  // ---------- batch ----------
+  function markDone(k,v){k=String(k).toLowerCase();if(v)done[k]=1;else delete done[k];save(KEY_D,done);render()}
+  function isDone(it){return !!done[keyOf(it)]}
   function render(){
     var box=$('list');box.textContent='';
     var n=items.length,c=0;
-    items.forEach(function(d,i){
-      var r=route(d),ok=isDone(d);if(ok)c++;
+    items.forEach(function(it,i){
+      var r=linksOf(it),ok=isDone(it),k=keyOf(it);if(ok)c++;
       var el=document.createElement('div');el.className='item'+(ok?' done':'');
       var num=document.createElement('span');num.className='num';num.textContent=i+1;
       var meta=document.createElement('div');meta.className='meta';
-      var dd=document.createElement('div');dd.className='doi';dd.textContent=d;
-      var pb=document.createElement('div');pb.className='pub';pb.textContent=r.pub;
-      meta.appendChild(dd);meta.appendChild(pb);
+      var dd=document.createElement('div');dd.className='doi';
+      dd.textContent=(it.pmid?'PMID '+it.pmid+(it.doi?' → ':''):'')+(it.doi||'');
+      meta.appendChild(dd);
+      if(it.label){var lb=document.createElement('div');lb.className='ttl';lb.textContent=it.label;meta.appendChild(lb)}
+      var pb=document.createElement('div');pb.className='pub';pb.textContent=r.pub;meta.appendChild(pb);
       var acts=document.createElement('div');acts.className='acts';
-      function link(txt,u,ghost){var a=document.createElement('a');a.className='btn'+(ghost?' ghost':'');a.textContent=txt;a.href=u;a.target='_blank';a.rel='noopener';a.addEventListener('click',function(){if(!ghost)setTimeout(function(){markDone(d,true)},150)});return a}
+      function link(txt,u,ghost){var a=document.createElement('a');a.className='btn'+(ghost?' ghost':'');a.textContent=txt;a.href=u;a.target='_blank';a.rel='noopener';a.addEventListener('click',function(){if(!ghost)setTimeout(function(){markDone(k,true)},150)});return a}
       if(r.pdf)acts.appendChild(link('PDF',r.pdf,false));
-      acts.appendChild(link('文章頁',r.art,!!r.pdf));
+      acts.appendChild(link(r.noProxy?'PubMed':'文章頁',r.art,!!r.pdf));
       if(r.free)acts.appendChild(link('免費版',r.free,true));
       var t=document.createElement('button');t.className='ghost';t.textContent=ok?'取消':'標為已下載';
-      t.addEventListener('click',function(){markDone(d,!ok)});acts.appendChild(t);
+      t.addEventListener('click',function(){markDone(k,!ok)});acts.appendChild(t);
       el.appendChild(num);el.appendChild(meta);el.appendChild(acts);box.appendChild(el);
     });
     $('stats').textContent=n?('已下載 '+c+' / '+n):'';
-    $('next').disabled=!items.some(function(d){return !isDone(d)});
+    $('next').disabled=!items.some(function(it){return !isDone(it)});
   }
-  $('build').addEventListener('click',function(){var a=detectSuffix($('batch').value);if(a)setSuffix(a,'從貼上的網址偵測');items=extractAll($('batch').value);save(KEY_L,items);render();
-    if(!items.length)$('stats').textContent='沒有找到 DOI';});
+  $('build').addEventListener('click',function(){
+    var raw=$('batch').value, a=detectSuffix(raw); if(a)setSuffix(a,'從貼上的網址偵測');
+    var toks=lineTokens(raw,true);
+    if(!toks.length){items=[];save(KEY_L,items);render();$('stats').textContent='沒有找到 DOI 或 PMID';return}
+    var pm=toks.filter(function(o){return o.pmid}).map(function(o){return o.pmid});
+    $('build').disabled=true;$('stats').textContent=pm.length?('向 PubMed 查詢 '+pm.length+' 個 PMID…'):'';
+    esummary(pm).then(function(){
+      items=finalize(toks);save(KEY_L,items);render();
+      var miss=items.filter(function(it){return it.pmid&&!it.doi}).length;
+      if(miss)$('stats').textContent+='｜'+miss+' 篇查不到 DOI，已改附 PubMed 連結';
+    }).catch(function(err){
+      items=finalize(toks);save(KEY_L,items);render();
+      $('stats').textContent+='｜PubMed 查詢失敗（'+err.message+'），PMID 暫時只附 PubMed 連結，稍後再按一次「產生清單」';
+    }).then(function(){$('build').disabled=false});
+  });
   $('next').addEventListener('click',function(){
-    for(var i=0;i<items.length;i++){var d=items[i];if(!isDone(d)){var r=route(d);openUrl(r.pdf||r.art);markDone(d,true);return}}
+    for(var i=0;i<items.length;i++){var it=items[i];if(!isDone(it)){var r=linksOf(it);openUrl(r.pdf||r.art);markDone(keyOf(it),true);return}}
   });
   $('clearDone').addEventListener('click',function(){done={};save(KEY_D,done);render()});
-  if(items.length)$('batch').value=items.join('\n');
+  if(items.length)$('batch').value=items.map(function(it){return it.pmid?it.pmid:it.doi}).join('\n');
   render();
 })();
 </script>

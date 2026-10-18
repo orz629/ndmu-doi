@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>NDMU DOI 全文入口</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one narrow working column — settings strip, quick DOI box, batch list. */
+:root{
+  --bg:#f5f6f3; --panel:#ffffff; --ink:#1d2428; --muted:#5f6b70; --line:#d9ddd6;
+  --accent:#1f6f6a; --accent-ink:#ffffff; --accent-soft:#e1efec;
+  --done:#e8f2e3; --done-ink:#3d6b32; --warn:#9a5b14; --warn-soft:#fbf0e1;
+  --sans:"Noto Sans TC",system-ui,-apple-system,"Segoe UI","Microsoft JhengHei",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#141a1c; --panel:#1c2427; --ink:#e4e9e7; --muted:#97a3a5; --line:#2e393c;
+  --accent:#5fb8ae; --accent-ink:#0e1a19; --accent-soft:#1f3633;
+  --done:#1f2f1c; --done-ink:#9fcf8e; --warn:#e2a35a; --warn-soft:#33281a; color-scheme:dark }}
+:root[data-theme="dark"]{
+  --bg:#141a1c; --panel:#1c2427; --ink:#e4e9e7; --muted:#97a3a5; --line:#2e393c;
+  --accent:#5fb8ae; --accent-ink:#0e1a19; --accent-soft:#1f3633;
+  --done:#1f2f1c; --done-ink:#9fcf8e; --warn:#e2a35a; --warn-soft:#33281a; color-scheme:dark }
+*{box-sizing:border-box}
+html{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 var(--sans)}
+.wrap{max-width:860px;margin:0 auto;padding-block:28px 60px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  display:grid;gap:20px}
+h1{font-size:1.5rem;margin:0;letter-spacing:.02em;text-wrap:balance}
+.sub{color:var(--muted);margin:4px 0 0;font-size:.92rem}
+section{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px;display:grid;gap:12px;min-width:0}
+h2{font-size:1rem;margin:0;display:flex;gap:8px;align-items:baseline}
+h2 small{font-weight:400;color:var(--muted);font-size:.82rem}
+label{font-size:.85rem;color:var(--muted)}
+input[type=text],textarea{width:100%;font:14px/1.5 var(--mono);color:var(--ink);background:var(--bg);
+  border:1px solid var(--line);border-radius:7px;padding:9px 11px}
+textarea{min-height:120px;resize:vertical}
+input:focus-visible,textarea:focus-visible,button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.row>input{flex:1 1 260px;min-width:0}
+button,.btn{font:500 14px var(--sans);border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);
+  border-radius:7px;padding:8px 14px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+button.ghost,.btn.ghost{background:transparent;color:var(--accent)}
+button:disabled{opacity:.45;cursor:not-allowed}
+.hint{font-size:.84rem;color:var(--muted);margin:0}
+.warn{background:var(--warn-soft);color:var(--warn);border-radius:7px;padding:8px 12px;font-size:.85rem;margin:0}
+.stats{font-variant-numeric:tabular-nums;color:var(--muted);font-size:.88rem}
+.list{display:grid;gap:8px}
+.item{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;border:1px solid var(--line);border-radius:8px;padding:9px 11px;min-width:0}
+.item.done{background:var(--done)}
+.item.done .doi{color:var(--done-ink);text-decoration:line-through}
+.num{font:12px var(--mono);color:var(--muted);font-variant-numeric:tabular-nums;width:2.6em;text-align:right}
+.meta{min-width:0}
+.doi{font:13px var(--mono);overflow-wrap:anywhere}
+.pub{font-size:.78rem;color:var(--muted)}
+.acts{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.acts a,.acts button{font-size:12.5px;padding:5px 9px}
+.chip{font-size:.75rem;background:var(--accent-soft);color:var(--accent);border-radius:999px;padding:1px 8px;margin-left:6px}
+.login{border-color:var(--accent);background:var(--accent-soft)}
+.step{display:inline-grid;place-items:center;width:1.5em;height:1.5em;border-radius:50%;background:var(--accent);color:var(--accent-ink);font-size:.8rem}
+.auto{border-top:1px dashed var(--line);padding-top:12px;display:grid;gap:6px}
+.auto h3{font-size:.92rem;margin:0}
+.auto p{margin:0}
+details summary{cursor:pointer;color:var(--muted);font-size:.88rem}
+code{font:13px var(--mono);background:var(--bg);padding:1px 5px;border-radius:4px}
+@media (max-width:560px){.item{grid-template-columns:1fr}.num{display:none}.acts{justify-content:flex-start}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>NDMU DOI 全文入口</h1>
+    <p class="sub">輸入 DOI，自動轉成學校入口網站的 PDF 網址。先在同一個瀏覽器登入入口網站，再點連結就會用您的權限下載。</p>
+  </header>
+
+  <section aria-labelledby="s-login" class="login">
+    <h2 id="s-login"><span class="step">1</span>先登入入口網站</h2>
+    <div class="row">
+      <a class="btn" href="https://800a.flysheet.com.tw/user/login/?next=https%3A//800a.flysheet.com.tw/" target="_blank" rel="noopener">登入入口網站</a>
+      <a id="testLogin2" class="btn ghost" target="_blank" rel="noopener">登入後測試 Wiley</a>
+    </div>
+    <p class="hint">登入頁會開在新分頁；登入完成後回到這裡，就可以開始下載。若點 PDF 被要求登入，代表登入逾時，再按一次「登入入口網站」即可。</p>
+  </section>
+
+  <section aria-labelledby="s-quick">
+    <h2 id="s-quick">單篇下載 <small>貼上 DOI 後按 Enter</small></h2>
+    <div class="row">
+      <input id="quick" type="text" placeholder="10.1111/jcpe.12936 或 https://doi.org/10.1111/jcpe.12936" autocomplete="off" spellcheck="false">
+      <button id="quickGo">開啟 PDF</button>
+      <button id="quickArt" class="ghost">文章頁</button>
+    </div>
+    <p id="quickMsg" class="hint">支援 Wiley（JP、JCP、JPR、COIR、Perio 2000）、Cochrane、Springer、SAGE、Taylor &amp; Francis；其他出版社會改走 doi.org。</p>
+  </section>
+
+  <section aria-labelledby="s-batch">
+    <h2 id="s-batch">批次清單 <small>可直接從 Excel 整欄貼上</small></h2>
+    <textarea id="batch" placeholder="每行一個 DOI，或整段文字貼上也可以，會自動抓出 DOI" spellcheck="false"></textarea>
+    <div class="row">
+      <button id="build">產生清單</button>
+      <button id="next" class="ghost" disabled>開啟下一篇未下載</button>
+      <button id="clearDone" class="ghost">清除已下載標記</button>
+      <span id="stats" class="stats"></span>
+    </div>
+    <p class="warn">短時間大量下載可能觸發出版社的系統性下載偵測，導致學校帳號被暫停。建議一次 20～30 篇，分幾天完成。</p>
+    <div id="list" class="list" aria-live="polite"></div>
+  </section>
+
+  <section aria-labelledby="s-set">
+    <h2 id="s-set">入口網站設定</h2>
+    <label for="suffix">代理伺服器後綴（出版社網址的「.」換成「-」，再接上這串）</label>
+    <div class="row">
+      <input id="suffix" type="text" spellcheck="false">
+      <button id="saveSuffix" class="ghost">儲存</button>
+      <a id="testLogin" class="btn ghost" target="_blank" rel="noopener">測試是否已登入</a>
+    </div>
+    <p class="hint">範例：<code>onlinelibrary.wiley.com</code> → <code>onlinelibrary-wiley-com.<span id="sfxEx"></span></code>。</p>
+    <p id="sfxMsg" class="hint" aria-live="polite"></p>
+    <div class="auto">
+      <h3>自動偵測（網址變了也不用手改）</h3>
+      <p class="hint"><b>方法一：貼網址。</b>從入口網站點進任何一篇文章，把網址列整串複製，貼到上面「單篇下載」或這一欄，工具會自己認出新的後綴並更新。</p>
+      <p class="hint"><b>方法二：書籤按鈕。</b>把下面這個按鈕拖到瀏覽器的書籤列。之後在入口網站的任何文章頁按一下這個書籤，就會回到本工具並自動更新設定。</p>
+      <p><a id="bm" class="btn ghost" href="#">更新入口網站設定</a></p>
+    </div>
+    <details>
+      <summary>為什麼不能按一個鍵全部自動下載？</summary>
+      <p class="hint">這個頁面放在 GitHub，跟入口網站不同網域，瀏覽器不允許它替您讀取入口網站的檔案；而且一次開很多分頁會被瀏覽器擋下。所以做法是每點一次開一篇，由瀏覽器用您的登入狀態下載。</p>
+    </details>
+  </section>
+</div>
+
+<script>
+(function(){
+  var DEFAULT_SUFFIX='mhdla.flysheet.com.tw:8443';
+  var KEY_S='doiPortal.suffix', KEY_D='doiPortal.done', KEY_L='doiPortal.list';
+  function load(k,d){try{var v=localStorage.getItem(k);return v===null?d:JSON.parse(v)}catch(e){return d}}
+  function save(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
+  var suffix=load(KEY_S,DEFAULT_SUFFIX), done=load(KEY_D,{}), items=load(KEY_L,[]);
+  var $=function(id){return document.getElementById(id)};
+
+  function proxyHost(h){return h.replace(/\./g,'-')+'.'+suffix}
+  function px(h,path){return 'https://'+proxyHost(h)+path}
+  function cleanDoi(s){
+    s=String(s||'').trim();
+    try{s=decodeURIComponent(s)}catch(e){}
+    var m=s.match(/10\.\d{4,9}\/[^\s"'<>]+/i);
+    if(!m) return null;
+    return m[0].split(/[?#]/)[0].replace(/\/(pdf|pdfdirect|epdf|full|abstract)$/i,'').replace(/[.,;:)\]}>]+$/,'');
+  }
+  function extractAll(t){
+    var out=[],seen={},re=/10\.\d{4,9}\/[^\s"'<>]+/gi,m;
+    t=String(t||'');
+    try{t=decodeURIComponent(t)}catch(e){}
+    while((m=re.exec(t))){var d=m[0].split(/[?#]/)[0].replace(/\/(pdf|pdfdirect|epdf|full|abstract)$/i,'').replace(/[.,;:)\]}>]+$/,'');var k=d.toLowerCase();if(!seen[k]){seen[k]=1;out.push(d)}}
+    return out;
+  }
+  function route(doi){
+    var d=doi, l=d.toLowerCase(), e=encodeURI(d);
+    if(l.indexOf('10.1002/14651858.')===0) return {pub:'Cochrane Library',pdf:px('www.cochranelibrary.com','/cdsr/doi/'+e+'/pdf/full'),art:px('www.cochranelibrary.com','/cdsr/doi/'+e+'/full'),free:'https://www.cochranelibrary.com/cdsr/doi/'+e+'/full'};
+    if(/^10\.(1111|1002|1902|1034|1046)\//.test(l)) return {pub:'Wiley',pdf:px('onlinelibrary.wiley.com','/doi/pdfdirect/'+e+'?download=true'),art:px('onlinelibrary.wiley.com','/doi/'+e)};
+    if(/^10\.1007\//.test(l)) return {pub:'Springer',pdf:px('link.springer.com','/content/pdf/'+e+'.pdf'),art:px('link.springer.com','/article/'+e)};
+    if(/^10\.1177\//.test(l)) return {pub:'SAGE',pdf:px('journals.sagepub.com','/doi/pdf/'+e),art:px('journals.sagepub.com','/doi/'+e)};
+    if(/^10\.1080\//.test(l)) return {pub:'Taylor & Francis',pdf:px('www.tandfonline.com','/doi/pdf/'+e),art:px('www.tandfonline.com','/doi/full/'+e)};
+    return {pub:'其他出版社（經 doi.org，入口網站不一定支援）',pdf:null,art:px('doi.org','/'+e),orig:'https://doi.org/'+e};
+  }
+  function openUrl(u){var w=window.open(u,'_blank','noopener');return !!w}
+
+  // settings
+  function renderSuffix(){$('suffix').value=suffix;$('sfxEx').textContent=suffix;$('testLogin').href=px('onlinelibrary.wiley.com','/');$('testLogin2').href=px('onlinelibrary.wiley.com','/')}
+  // A proxied host looks like  onlinelibrary-wiley-com.<suffix>  — the first label is the
+  // original domain with dots turned into dashes, so it ends in a top-level-domain word.
+  var TLD='(?:com|org|net|edu|gov|info|io|co-uk|ac-uk|org-uk|com-au|com-tw|org-tw|edu-tw|de|nl|ch|jp|fr|eu)';
+  function detectSuffix(text){
+    var m=String(text||'').match(new RegExp('(?:https?://)?([a-z0-9]+(?:-[a-z0-9]+)*-'+TLD+')\\.([a-z0-9-]+(?:\\.[a-z0-9-]+)+(?::\\d+)?)','i'));
+    return m?m[2].toLowerCase():null;
+  }
+  function setSuffix(v,why){
+    if(!v||v===suffix){ if(v&&why)$('sfxMsg').textContent='入口網站設定沒有變動（'+v+'）。'; return false }
+    var old=suffix; suffix=v; save(KEY_S,v); renderSuffix(); render();
+    $('sfxMsg').textContent='已自動更新：'+old+' → '+v+(why?'（'+why+'）':'');
+    return true;
+  }
+  $('saveSuffix').addEventListener('click',function(){
+    var raw=$('suffix').value.trim(), auto=detectSuffix(raw);
+    var v=auto||raw.replace(/^https?:\/\//,'').replace(/^\./,'').replace(/\/.*$/,'');
+    if(v) setSuffix(v,auto?'從貼上的網址偵測':'手動輸入');
+  });
+  $('suffix').addEventListener('paste',function(){setTimeout(function(){var a=detectSuffix($('suffix').value);if(a)setSuffix(a,'從貼上的網址偵測')},0)});
+  // bookmarklet: read the portal page's host, send it back here in the hash
+  (function(){
+    var here=location.href.split('#')[0];
+    var code="(function(){var h=location.host,m=h.match(/^[a-z0-9-]+-[a-z0-9]+\\.(.+)$/i);"+
+      "if(!m||h.indexOf('-')<0){alert('請在入口網站的文章頁（網址像 onlinelibrary-wiley-com.xxx）上按這個書籤');return}"+
+      "location.href="+JSON.stringify(here)+"+'#sfx='+encodeURIComponent(m[1])})()";
+    $('bm').href='javascript:'+code;
+    $('bm').addEventListener('click',function(e){e.preventDefault();$('sfxMsg').textContent='請把這個按鈕拖到書籤列，在入口網站的文章頁上點它。'});
+  })();
+  // receive from bookmarklet
+  (function(){
+    var m=location.hash.match(/[#&]sfx=([^&]+)/);
+    if(m){var v=decodeURIComponent(m[1]).toLowerCase();
+      if(/^[a-z0-9-]+(\.[a-z0-9-]+)+(:\d+)?$/.test(v)) setSuffix(v,'從書籤偵測');
+      try{history.replaceState(null,'',location.pathname+location.search)}catch(e){}}
+  })();
+  renderSuffix();
+
+  // quick
+  function quick(kind){
+    var a=detectSuffix($('quick').value); if(a) setSuffix(a,'從貼上的網址偵測');
+    var d=cleanDoi($('quick').value);
+    if(!d){$('quickMsg').textContent='找不到 DOI，請確認格式，例如 10.1111/jcpe.12936。';return}
+    var r=route(d), u=(kind==='pdf'&&r.pdf)?r.pdf:r.art;
+    $('quickMsg').textContent=r.pub+'：'+d+(kind==='pdf'&&!r.pdf?'（此出版社沒有 PDF 直連，已開文章頁）':'');
+    openUrl(u); markDone(d,true);
+  }
+  $('quickGo').addEventListener('click',function(){quick('pdf')});
+  $('quickArt').addEventListener('click',function(){quick('art')});
+  $('quick').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();quick('pdf')}});
+
+  // batch
+  function markDone(d,v){var k=d.toLowerCase();if(v)done[k]=1;else delete done[k];save(KEY_D,done);render()}
+  function isDone(d){return !!done[d.toLowerCase()]}
+  function render(){
+    var box=$('list');box.textContent='';
+    var n=items.length,c=0;
+    items.forEach(function(d,i){
+      var r=route(d),ok=isDone(d);if(ok)c++;
+      var el=document.createElement('div');el.className='item'+(ok?' done':'');
+      var num=document.createElement('span');num.className='num';num.textContent=i+1;
+      var meta=document.createElement('div');meta.className='meta';
+      var dd=document.createElement('div');dd.className='doi';dd.textContent=d;
+      var pb=document.createElement('div');pb.className='pub';pb.textContent=r.pub;
+      meta.appendChild(dd);meta.appendChild(pb);
+      var acts=document.createElement('div');acts.className='acts';
+      function link(txt,u,ghost){var a=document.createElement('a');a.className='btn'+(ghost?' ghost':'');a.textContent=txt;a.href=u;a.target='_blank';a.rel='noopener';a.addEventListener('click',function(){if(!ghost)setTimeout(function(){markDone(d,true)},150)});return a}
+      if(r.pdf)acts.appendChild(link('PDF',r.pdf,false));
+      acts.appendChild(link('文章頁',r.art,!!r.pdf));
+      if(r.free)acts.appendChild(link('免費版',r.free,true));
+      var t=document.createElement('button');t.className='ghost';t.textContent=ok?'取消':'標為已下載';
+      t.addEventListener('click',function(){markDone(d,!ok)});acts.appendChild(t);
+      el.appendChild(num);el.appendChild(meta);el.appendChild(acts);box.appendChild(el);
+    });
+    $('stats').textContent=n?('已下載 '+c+' / '+n):'';
+    $('next').disabled=!items.some(function(d){return !isDone(d)});
+  }
+  $('build').addEventListener('click',function(){var a=detectSuffix($('batch').value);if(a)setSuffix(a,'從貼上的網址偵測');items=extractAll($('batch').value);save(KEY_L,items);render();
+    if(!items.length)$('stats').textContent='沒有找到 DOI';});
+  $('next').addEventListener('click',function(){
+    for(var i=0;i<items.length;i++){var d=items[i];if(!isDone(d)){var r=route(d);openUrl(r.pdf||r.art);markDone(d,true);return}}
+  });
+  $('clearDone').addEventListener('click',function(){done={};save(KEY_D,done);render()});
+  if(items.length)$('batch').value=items.join('\n');
+  render();
+})();
+</script>
+</body>
+</html>
